@@ -2,7 +2,7 @@
 
 A self-hosted web panel for publishing podcast episodes to [Castopod](https://castopod.org/) via its REST API. Built with PHP, no framework dependencies, designed to run on any standard LAMP/LEMP server.
 
-![CastoPOST panel screenshot](https://via.placeholder.com/800x400/0f0f10/c9b8ff?text=CastoPOST)
+<img width="2261" height="1346" alt="castopost" src="https://github.com/user-attachments/assets/a276fe31-e4ba-431a-8f0b-4b6470ea8647" />
 
 ---
 
