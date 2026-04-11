@@ -1,0 +1,141 @@
+# ============================================================
+# CastoPOST - Nginx Configuration Example
+# ============================================================
+# Replace the following placeholders before using:
+#   YOUR_DOMAIN        -> your domain, e.g. podcast.example.com
+#   YOUR_WEBROOT       -> path to your web root, e.g. /var/www/html/mysite
+#   YOUR_PHP_VERSION   -> your PHP-FPM version, e.g. php8.3-fpm
+#   /castopost            -> the subfolder where CastoPOST lives (change if needed)
+#
+# To verify your PHP-FPM socket path:
+#   ls /run/php/
+# ============================================================
+
+# HTTP -> HTTPS redirect
+server {
+    listen 80;
+    server_name YOUR_DOMAIN;
+    return 301 https://YOUR_DOMAIN$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl;
+    server_name YOUR_DOMAIN;
+
+    # SSL - adjust paths to your certificate files
+    # Using Let's Encrypt (certbot): certbot --nginx -d YOUR_DOMAIN
+    ssl_certificate     /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem;
+
+    # SSL settings
+    ssl_session_cache   builtin:1000 shared:SSL:10m;
+    ssl_session_timeout 5m;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         'ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256';
+    ssl_prefer_server_ciphers on;
+
+    # Gzip compression
+    gzip on;
+    gzip_comp_level   6;
+    gzip_http_version 1.1;
+    gzip_proxied      any;
+    gzip_min_length   1100;
+    gzip_buffers      16 8k;
+    gzip_types        text/plain text/css application/javascript application/json
+                      application/xml application/xml+rss text/javascript;
+    gzip_disable      "MSIE [1-6]\.(?!.*SV1)";
+    gzip_vary         on;
+
+    # Web root - the directory your main site lives in
+    root  YOUR_WEBROOT;
+    index index.php index.html index.htm;
+
+    # Allow large audio file uploads (adjust as needed)
+    client_max_body_size 520M;
+
+    # Security headers
+    add_header X-Content-Type-Options "nosniff"     always;
+    add_header X-Frame-Options        "SAMEORIGIN"  always;
+    add_header Referrer-Policy        "no-referrer" always;
+
+    # Logs
+    access_log /var/log/nginx/YOUR_DOMAIN_access.log;
+    error_log  /var/log/nginx/YOUR_DOMAIN_error.log;
+
+    # -------------------------------------------------------
+    # CastoPOST - /castopost/
+    # -------------------------------------------------------
+    # Change /castopost/ to whatever subfolder you deployed to.
+    # If CastoPOST is at the domain root, replace /castopost/ with /
+
+    # Block direct access to sensitive PHP files
+    location ~ ^/castopost/(config|auth|castopod|drafts_store|templates_store|podcasts_store)\.php$ {
+        deny all;
+        return 404;
+    }
+
+    # Block direct access to JSON data files
+    location ~ ^/castopost/.*\.json$ {
+        deny all;
+        return 404;
+    }
+
+    # Block tmp directory
+    location ^~ /castopost/tmp/ {
+        deny all;
+        return 404;
+    }
+
+    # CastoPOST application
+    location ^~ /castopost/ {
+        index index.php;
+        try_files $uri $uri/ /castopost/index.php?$query_string;
+
+        # PHP-FPM - adjust socket path to match your PHP version
+        location ~ \.php$ {
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass            unix:/run/php/YOUR_PHP_VERSION.sock;
+            fastcgi_index           index.php;
+            fastcgi_param           SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include                 fastcgi_params;
+
+            # Extended timeouts for audio uploads and FFmpeg conversion
+            fastcgi_read_timeout 600;
+            fastcgi_send_timeout 600;
+            fastcgi_buffers      16 16k;
+            fastcgi_buffer_size  32k;
+        }
+    }
+
+    # -------------------------------------------------------
+    # General PHP processing for the rest of the site
+    # (remove this block if your main site is static HTML)
+    # -------------------------------------------------------
+    location ~ \.php$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass            unix:/run/php/YOUR_PHP_VERSION.sock;
+        fastcgi_index           index.php;
+        fastcgi_param           SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include                 fastcgi_params;
+        fastcgi_read_timeout    300;
+        fastcgi_send_timeout    300;
+    }
+
+    # Static files and site root
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+
+# ============================================================
+# DEPLOYMENT CHECKLIST
+# ============================================================
+# 1. Replace all YOUR_* placeholders above
+# 2. Verify PHP-FPM socket:  ls /run/php/
+# 3. Test config:            nginx -t
+# 4. Reload Nginx:           systemctl reload nginx
+# 5. Verify SSL cert:        certbot certificates
+# 6. Test the API is reachable:
+#    curl -u "api_user:api_pass" https://YOUR_CASTOPOD_DOMAIN/api/rest/v1/podcasts/
+# ============================================================
