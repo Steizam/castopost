@@ -301,4 +301,4 @@ MIT License. See LICENSE file for details.
 
 ## Contributing
 
-Pull requests welcome. Please test against Castopod 1.x and ensure no personal data or credentials are included in commits.
+Pull requests welcome.
