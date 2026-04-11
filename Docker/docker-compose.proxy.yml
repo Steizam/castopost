@@ -1,0 +1,38 @@
+services:
+  castopost:
+    build: .
+    container_name: castopost
+    # Don't expose port directly - Nginx proxy handles it
+    expose:
+      - "8080"
+
+    volumes:
+      - castopost_data:/data
+
+    environment:
+      APP_PASSWORD:            "change_me_now"
+      CASTOPOD_URL:            "https://your-castopod.com"
+      CASTOPOD_API_USER:       "your_api_username"
+      CASTOPOD_API_PASSWORD:   "your_api_password"
+      CASTOPOD_PODCAST_HANDLE: "my-podcast"
+      CASTOPOD_USER_ID:        "1"
+      APP_TIMEZONE:            "UTC"
+
+    restart: unless-stopped
+
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: castopost-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - castopost
+    restart: unless-stopped
+
+volumes:
+  castopost_data:
+    driver: local
