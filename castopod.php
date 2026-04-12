@@ -138,7 +138,7 @@ class CastopodAPI {
         // Step 1 - resolve podcast id
         $podcastId = $this->getPodcastIdByHandle($podcastHandle);
 
-        // Step 2 - ensure MP3 (API only accepts mp3 and m4a)
+        // Step 2 - convert to MP3 and normalize to -16 LUFS (all formats)
         if ($audioFile && !empty($audioFile['tmp_name'])) {
             $audioFile = $this->ensureMp3($audioFile);
             $this->validateAudioFile($audioFile);
@@ -213,42 +213,80 @@ class CastopodAPI {
     }
 
     // -------------------------------------------------------
-    // WebM / Opus → MP3 via FFmpeg
+    // Audio processing: convert to MP3 + normalize to -16 LUFS
+    // Uses two-pass EBU R128 loudnorm (same standard as Apple/Spotify)
+    // Target: -16 LUFS integrated, -1.5 dBTP true peak, 11 LU range
+    // Applied to ALL audio uploads, not just WebM recordings
     // -------------------------------------------------------
     private function ensureMp3(array $file): array {
         $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, ['webm', 'opus', 'ogg'])) {
-            return $file; // already a compatible format
-        }
 
         $ffmpeg = trim((string) shell_exec('which ffmpeg 2>/dev/null'));
         if (empty($ffmpeg)) {
             throw new Exception(
-                'El audio grabado está en formato WebM y FFmpeg no está instalado. ' .
-                'Instálalo con: sudo apt install ffmpeg'
+                'FFmpeg no esta instalado. Instala con: sudo apt install ffmpeg'
             );
         }
 
         if (!is_dir(UPLOAD_TMP_DIR)) mkdir(UPLOAD_TMP_DIR, 0700, true);
 
-        $out = UPLOAD_TMP_DIR . '/conv_' . uniqid() . '.mp3';
-        $cmd = sprintf(
-            '%s -y -i %s -vn -acodec libmp3lame -ab 192k -ar 44100 %s 2>&1',
+        $input = $file['tmp_name'];
+        $normalizedName = preg_replace('/\.(webm|opus|ogg|mp3|m4a|wav|flac|aac)$/i', '.mp3', $file['name']);
+        $out = UPLOAD_TMP_DIR . '/norm_' . uniqid() . '.mp3';
+
+        // Pass 1: measure loudness stats
+        $measureCmd = sprintf(
+            '%s -y -i %s -vn -af loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json -f null /dev/null 2>&1',
             escapeshellarg($ffmpeg),
-            escapeshellarg($file['tmp_name']),
+            escapeshellarg($input)
+        );
+        $measureOutput = (string) shell_exec($measureCmd);
+
+        // Extract JSON from FFmpeg stderr output
+        $stats = null;
+        if ($measureOutput && preg_match('/\{[^}]+\}/s', $measureOutput, $m)) {
+            $stats = json_decode($m[0], true);
+        }
+
+        // Pass 2: apply normalization with measured values
+        if ($stats &&
+            isset($stats['input_i'], $stats['input_tp'],
+                  $stats['input_lra'], $stats['input_thresh'],
+                  $stats['target_offset'])) {
+            // Two-pass linear normalization - most accurate
+            $filter = sprintf(
+                'loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s:linear=true',
+                $stats['input_i'],
+                $stats['input_tp'],
+                $stats['input_lra'],
+                $stats['input_thresh'],
+                $stats['target_offset']
+            );
+        } else {
+            // Fallback: single-pass if measurement failed
+            $filter = 'loudnorm=I=-16:TP=-1.5:LRA=11';
+        }
+
+        $convertCmd = sprintf(
+            '%s -y -i %s -vn -af %s -acodec libmp3lame -ab 192k -ar 44100 %s 2>&1',
+            escapeshellarg($ffmpeg),
+            escapeshellarg($input),
+            escapeshellarg($filter),
             escapeshellarg($out)
         );
-        $log = shell_exec($cmd);
+        $convertLog = (string) shell_exec($convertCmd);
 
         if (!file_exists($out) || filesize($out) < 1024) {
-            throw new Exception('FFmpeg no pudo convertir el audio. Log: ' . substr((string) $log, -400));
+            throw new Exception(
+                'FFmpeg no pudo procesar el audio. Log: ' . substr($convertLog, -500)
+            );
         }
 
         $this->tmpFiles[] = $out;
 
         return [
             'tmp_name' => $out,
-            'name'     => preg_replace('/\.(webm|opus|ogg)$/i', '.mp3', $file['name']),
+            'name'     => $normalizedName,
             'type'     => 'audio/mpeg',
             'size'     => filesize($out),
         ];

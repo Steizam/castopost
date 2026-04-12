@@ -198,6 +198,15 @@ if ($auth->isLoggedIn() && in_array($page, ['dashboard', 'episodes', 'drafts', '
         }
 
         foreach ($all as $ep) {
+            // Castopod returns published_at as an object: {"date":"...","timezone_type":3,"timezone":"UTC"}
+            // Normalize it to a plain string for consistent use in templates
+            if (isset($ep['published_at']['date'])) {
+                $ep['published_at'] = $ep['published_at']['date'];
+            }
+            if (isset($ep['created_at']['date'])) {
+                $ep['created_at'] = $ep['created_at']['date'];
+            }
+
             if (empty($ep['published_at'])) $drafts[] = $ep;
             else $episodes[] = $ep;
         }
