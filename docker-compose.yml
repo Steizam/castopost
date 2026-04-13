@@ -1,0 +1,42 @@
+services:
+  castopost:
+    image: castopost:latest
+    # Or build locally:
+    # build: .
+    container_name: castopost
+
+    ports:
+      - "8080:8080"
+      # To serve on port 80/443, put a reverse proxy (Nginx, Traefik, Caddy)
+      # in front of this container instead of exposing directly.
+
+    volumes:
+      # Persist config, data files, and uploaded audio
+      - castopost_data:/data
+
+    environment:
+      # ── Required ──────────────────────────────────────────
+      APP_PASSWORD:            "change_me_now"
+      CASTOPOD_URL:            "https://your-castopod.com"
+      CASTOPOD_API_USER:       "your_api_username"
+      CASTOPOD_API_PASSWORD:   "your_api_password"
+      CASTOPOD_PODCAST_HANDLE: "my-podcast"
+      CASTOPOD_USER_ID:        "1"
+
+      # ── Optional ──────────────────────────────────────────
+      APP_TIMEZONE:    "UTC"       # e.g. Europe/Madrid, America/New_York
+      CASTOPOD_DEBUG:  "false"
+      MAX_AUDIO_SIZE:  "536870912" # 512 MB in bytes
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  castopost_data:
+    driver: local

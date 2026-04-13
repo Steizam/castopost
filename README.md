@@ -2,7 +2,7 @@
 
 A self-hosted web panel for publishing podcast episodes to [Castopod](https://castopod.org/) via its REST API. Built with PHP, no framework dependencies, designed to run on any standard LAMP/LEMP server.
 
-<img width="2261" height="1346" alt="castopost" src="https://github.com/user-attachments/assets/a276fe31-e4ba-431a-8f0b-4b6470ea8647" />
+![CastoPOST panel screenshot](https://via.placeholder.com/800x400/0f0f10/c9b8ff?text=CastoPOST)
 
 ---
 
@@ -65,14 +65,14 @@ A self-hosted web panel for publishing podcast episodes to [Castopod](https://ca
 ### 1. Clone or download
 
 ```bash
-git clone https://github.com/ernestoacostame/castopost.git /var/www/html/mysite/CastoPost
+git clone https://github.com/yourusername/castopost.git /var/www/html/mysite/studio
 # or download and extract the ZIP
 ```
 
 ### 2. Set file permissions
 
 ```bash
-cd /var/www/html/mysite/castopost
+cd /var/www/html/mysite/studio
 chmod 700 tmp/
 chmod 664 podcasts.json local_drafts.json templates.json
 ```
@@ -157,31 +157,31 @@ ffmpeg -version
 
 ### 8. Configure Nginx
 
-See the included `nginx.conf.example` for a full configuration. Key blocks for the CastoPOST panel:
+See the included `nginx.conf.example` for a full configuration. Key blocks for the studio panel:
 
 ```nginx
 # Block sensitive PHP files
-location ~ ^/CastoPost/(config|auth|castopod|drafts_store|templates_store|podcasts_store)\.php$ {
+location ~ ^/studio/(config|auth|castopod|drafts_store|templates_store|podcasts_store)\.php$ {
     deny all;
     return 404;
 }
 
 # Block data files
-location ~ ^/CastoPost/.*\.(json)$ {
+location ~ ^/studio/.*\.(json)$ {
     deny all;
     return 404;
 }
 
 # Block tmp directory
-location ^~ /CastoPost/tmp/ {
+location ^~ /studio/tmp/ {
     deny all;
     return 404;
 }
 
-# PHP processing for CastoPost
-location ^~ /CastoPost/ {
+# PHP processing for studio
+location ^~ /studio/ {
     index index.php;
-    try_files $uri $uri/ /CastoPost/index.php?$query_string;
+    try_files $uri $uri/ /studio/index.php?$query_string;
 
     location ~ \.php$ {
         fastcgi_pass unix:/run/php/php8.3-fpm.sock;
@@ -198,14 +198,14 @@ client_max_body_size 520M;
 
 ### 9. Access the panel
 
-Navigate to `https://yourdomain.com/CastoPost/` and log in with the password you set in `config.php`.
+Navigate to `https://yourdomain.com/studio/` and log in with the password you set in `config.php`.
 
 ---
 
 ## File Structure
 
 ```
-CastoPost/
+studio/
 ├── index.php              # Main controller / router
 ├── config.php             # Configuration (edit this)
 ├── auth.php               # Session authentication
@@ -301,4 +301,90 @@ MIT License. See LICENSE file for details.
 
 ## Contributing
 
-Pull requests welcome.
+Pull requests welcome. Please test against Castopod 1.x and ensure no personal data or credentials are included in commits.
+
+---
+
+## Docker
+
+CastoPOST can be run as a Docker container. The image bundles PHP 8.3, Nginx, and FFmpeg.
+
+### Quick start (no HTTPS)
+
+```bash
+docker run -d \
+  --name castopost \
+  -p 8080:8080 \
+  -v castopost_data:/data \
+  -e APP_PASSWORD="your_secure_password" \
+  -e CASTOPOD_URL="https://your-castopod.com" \
+  -e CASTOPOD_API_USER="your_api_user" \
+  -e CASTOPOD_API_PASSWORD="your_api_password" \
+  -e CASTOPOD_PODCAST_HANDLE="my-podcast" \
+  -e CASTOPOD_USER_ID="1" \
+  castopost:latest
+```
+
+Then open `http://localhost:8080`.
+
+### With docker-compose (recommended)
+
+```bash
+# Copy and edit the compose file
+cp docker-compose.yml docker-compose.override.yml
+nano docker-compose.override.yml  # set your environment variables
+
+# Build and start
+docker compose up -d
+
+# View logs
+docker compose logs -f
+```
+
+### With HTTPS reverse proxy
+
+Use `docker-compose.proxy.yml` to add an Nginx reverse proxy with SSL:
+
+```bash
+# Edit docker/proxy.conf - replace YOUR_DOMAIN
+# Make sure Let's Encrypt certs exist at /etc/letsencrypt
+
+docker compose -f docker-compose.proxy.yml up -d
+```
+
+### Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `APP_PASSWORD` | Yes | `change_me_now` | Login password for the panel |
+| `CASTOPOD_URL` | Yes | — | Your Castopod instance URL |
+| `CASTOPOD_API_USER` | Yes | — | REST API username (from `.env`) |
+| `CASTOPOD_API_PASSWORD` | Yes | — | REST API password (from `.env`) |
+| `CASTOPOD_PODCAST_HANDLE` | Yes | `my-podcast` | Default podcast slug |
+| `CASTOPOD_USER_ID` | Yes | `1` | Your numeric user ID in Castopod |
+| `APP_TIMEZONE` | No | `UTC` | PHP timezone string |
+| `CASTOPOD_DEBUG` | No | `false` | Enable API debug logging |
+| `MAX_AUDIO_SIZE` | No | `536870912` | Max audio upload size in bytes (512 MB) |
+
+### Volume: /data
+
+All persistent data is stored in the `/data` volume:
+
+```
+/data/
+├── config.php          # Auto-generated from env vars (editable)
+├── podcasts.json       # Saved podcast list
+├── local_drafts.json   # Episode drafts
+├── templates.json      # Description templates
+└── tmp/                # Temporary audio files
+```
+
+The `config.php` inside `/data` is auto-generated on first run from environment variables. You can also edit it directly inside the volume for advanced configuration without rebuilding the image.
+
+### Build from source
+
+```bash
+git clone https://github.com/yourusername/castopost.git
+cd castopost
+docker build -t castopost:latest .
+```

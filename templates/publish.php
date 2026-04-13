@@ -1,0 +1,335 @@
+<?php
+// Load values from local draft if editing one
+$v = $editDraft ?? $_POST;
+$draftId = $editDraft['draft_id'] ?? '';
+?>
+<div class="page-head fade">
+  <h1><?= $draftId ? 'Editar borrador' : 'Nuevo episodio' ?></h1>
+  <p>Publicando en <strong><?= htmlspecialchars($activePodcast) ?></strong></p>
+</div>
+
+<!-- LOCAL DRAFTS SIDEBAR LINK -->
+<?php if (!empty($localDrafts) && !$draftId): ?>
+<div class="drafts-bar fade">
+  <span style="font-size:.78rem;color:var(--text3)">Tienes <?= count($localDrafts) ?> borrador<?= count($localDrafts)>1?'es':'' ?> local<?= count($localDrafts)>1?'es':'' ?>:</span>
+  <?php foreach (array_slice($localDrafts, 0, 3) as $ld): ?>
+  <a href="index.php?page=publish&podcast=<?= urlencode($activePodcast) ?>&draft_id=<?= urlencode($ld['draft_id']) ?>" class="draft-chip">
+    <?= htmlspecialchars($ld['title'] ?: 'Sin titulo') ?>
+  </a>
+  <?php endforeach; ?>
+  <?php if (count($localDrafts) > 3): ?>
+  <a href="index.php?page=local_drafts&podcast=<?= urlencode($activePodcast) ?>" class="draft-chip">+<?= count($localDrafts)-3 ?> mas</a>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<!-- MAIN PUBLISH FORM -->
+<form method="POST" action="index.php?page=publish&podcast=<?= urlencode($activePodcast) ?>" enctype="multipart/form-data" data-loading id="publishForm">
+  <input type="hidden" name="podcast_handle" value="<?= htmlspecialchars($activePodcast) ?>">
+  <input type="hidden" name="draft_id" value="<?= htmlspecialchars($draftId) ?>">
+
+  <!-- AUDIO -->
+  <div class="group-label">Audio</div>
+
+  <div class="recorder fade" id="recorderBox">
+    <canvas class="rec-canvas" id="recCanvas"></canvas>
+    <div class="rec-timer" id="recTimer">00:00:00</div>
+    <div class="rec-status" id="recStatus">Listo para grabar</div>
+    <div class="rec-btns">
+      <button type="button" class="btn btn-ghost btn-sm" id="btnRec">Grabar</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnPause" disabled>Pausar</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnStop" disabled>Detener</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnDiscard" style="display:none">Descartar</button>
+    </div>
+    <audio id="recPlayback" controls style="display:none"></audio>
+    <input type="hidden" name="recorded_audio_data" id="recData">
+    <input type="hidden" name="recorded_audio_name" id="recName">
+  </div>
+
+  <div class="or-line" style="margin:1rem 0">o sube un archivo</div>
+
+  <div class="field">
+    <div class="upload-zone">
+      <input type="file" name="audio_file" accept="audio/*,.mp3,.ogg,.wav,.aac,.flac,.m4a,.opus">
+      <div class="upload-icon">&#127911;</div>
+      <div class="upload-main">Arrastra o selecciona un audio</div>
+      <div class="upload-sub">MP3 - M4A - WAV - FLAC - max <?= round(MAX_AUDIO_SIZE/1024/1024) ?> MB</div>
+      <div class="upload-name"></div>
+    </div>
+  </div>
+
+  <div class="or-line">o usa una URL</div>
+
+  <div class="field">
+    <label for="audio_url">URL del audio</label>
+    <input type="url" id="audio_url" name="audio_url" placeholder="https://example.com/audio.mp3" value="<?= htmlspecialchars($v['audio_url'] ?? '') ?>">
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- METADATA -->
+  <div class="group-label">Informacion del episodio</div>
+
+  <div class="field">
+    <label for="ep-title">Titulo <span class="req">*</span></label>
+    <input type="text" id="ep-title" name="title" required placeholder="Titulo del episodio" value="<?= htmlspecialchars($v['title'] ?? '') ?>">
+  </div>
+
+  <div class="field">
+    <label for="ep-slug">Slug <span class="sub">(auto-generado)</span></label>
+    <input type="text" id="ep-slug" name="slug" placeholder="titulo-del-episodio" value="<?= htmlspecialchars($v['slug'] ?? '') ?>">
+  </div>
+
+  <!-- DESCRIPTION with templates -->
+  <div class="field">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem">
+      <label for="ep-desc" style="margin:0">Descripcion <span class="req">*</span></label>
+      <?php if (!empty($templates)): ?>
+      <div style="display:flex;align-items:center;gap:.4rem">
+        <select id="tplPicker" style="padding:.2rem .6rem;font-size:.72rem;height:auto;background:var(--bg3);border-color:var(--line2);color:var(--text2)">
+          <option value="">Usar plantilla...</option>
+          <?php foreach ($templates as $tpl): ?>
+          <option value="<?= htmlspecialchars(addslashes($tpl['description'])) ?>"><?= htmlspecialchars($tpl['name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <a href="index.php?page=templates" class="btn btn-ghost btn-sm" style="padding:.2rem .5rem;font-size:.72rem">Editar</a>
+      </div>
+      <?php else: ?>
+      <a href="index.php?page=templates" style="font-size:.72rem;color:var(--text3)">+ Crear plantilla</a>
+      <?php endif; ?>
+    </div>
+    <textarea id="ep-desc" name="description" required placeholder="Notas del episodio, enlaces, creditos..."><?= htmlspecialchars($v['description'] ?? '') ?></textarea>
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label for="ep-season">Temporada</label>
+      <input type="number" id="ep-season" name="season_number" min="1" placeholder="1" value="<?= htmlspecialchars($v['season_number'] ?? '') ?>">
+    </div>
+    <div class="field">
+      <label for="ep-num">Episodio <span class="sub">(sig: <?= $nextEpisodeNumber ?>)</span></label>
+      <input type="number" id="ep-num" name="episode_number" min="0"
+             placeholder="<?= $nextEpisodeNumber ?>"
+             value="<?= htmlspecialchars($v['episode_number'] ?? $nextEpisodeNumber) ?>">
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="group-label">Opciones</div>
+
+  <div class="field-row">
+    <div class="field">
+      <label for="ep-type">Tipo</label>
+      <select id="ep-type" name="episode_type">
+        <option value="full"    <?= ($v['episode_type']??'full')==='full'   ?'selected':'' ?>>Full</option>
+        <option value="trailer" <?= ($v['episode_type']??'')==='trailer'    ?'selected':'' ?>>Trailer</option>
+        <option value="bonus"   <?= ($v['episode_type']??'')==='bonus'      ?'selected':'' ?>>Bonus</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="ep-date">Publicacion</label>
+      <input type="datetime-local" id="ep-date" name="published_at" value="<?= htmlspecialchars($v['published_at'] ?? date('Y-m-d\TH:i')) ?>">
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="check-row">
+      <input type="checkbox" name="explicit" <?= !empty($v['explicit'])?'checked':'' ?>>
+      Contenido explicito
+    </label>
+  </div>
+
+  <div class="field">
+    <label>Portada del episodio <span class="sub">(opcional)</span></label>
+    <div class="upload-zone">
+      <input type="file" name="cover_image" accept="image/jpeg,image/png,image/webp">
+      <div class="upload-icon">&#128444;</div>
+      <div class="upload-main">Imagen de portada</div>
+      <div class="upload-sub">JPG - PNG - min 1400x1400 px</div>
+      <div class="upload-name"></div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- PREVIEW SECTION -->
+  <div class="group-label">Vista previa</div>
+  <div class="preview-box fade" id="previewBox">
+    <div class="preview-title" id="prevTitle">--</div>
+    <div class="preview-meta" id="prevMeta">--</div>
+    <div class="preview-desc" id="prevDesc"></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ACTIONS -->
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+    <button type="submit" class="btn btn-primary" style="flex:1">
+      &#128640; Publicar en Castopod
+    </button>
+    <button type="button" class="btn btn-ghost" id="btnSaveDraft">
+      &#128190; Guardar borrador
+    </button>
+    <a href="index.php?page=dashboard&podcast=<?= urlencode($activePodcast) ?>" class="btn btn-ghost">Cancelar</a>
+  </div>
+  <?php if ($draftId): ?>
+  <p style="font-size:.75rem;color:var(--green);margin-top:.6rem">Editando borrador guardado el <?= htmlspecialchars($editDraft['saved_at'] ?? '') ?></p>
+  <?php endif; ?>
+</form>
+
+<!-- SAVE DRAFT FORM (hidden, submitted by JS) -->
+<form method="POST" action="index.php?page=save_draft&podcast=<?= urlencode($activePodcast) ?>" id="draftForm" style="display:none">
+  <input type="hidden" name="draft_id" id="draftFormId" value="<?= htmlspecialchars($draftId) ?>">
+  <input type="hidden" name="title"          id="df_title">
+  <input type="hidden" name="description"    id="df_desc">
+  <input type="hidden" name="slug"           id="df_slug">
+  <input type="hidden" name="season_number"  id="df_season">
+  <input type="hidden" name="episode_number" id="df_num">
+  <input type="hidden" name="episode_type"   id="df_type">
+  <input type="hidden" name="published_at"   id="df_date">
+  <input type="hidden" name="explicit"       id="df_explicit">
+  <input type="hidden" name="audio_url"      id="df_audiourl">
+</form>
+
+<script>
+// RECORDER
+(function(){
+  let mr, chunks=[], stream, raf, secs=0, iv, paused=false, analyser, dataArr;
+  const btnRec=document.getElementById('btnRec'), btnPause=document.getElementById('btnPause'),
+        btnStop=document.getElementById('btnStop'), btnDisc=document.getElementById('btnDiscard'),
+        timer=document.getElementById('recTimer'), status=document.getElementById('recStatus'),
+        playback=document.getElementById('recPlayback'), recData=document.getElementById('recData'),
+        recName=document.getElementById('recName'), canvas=document.getElementById('recCanvas'),
+        ctx=canvas.getContext('2d');
+
+  function fmt(s){ return [Math.floor(s/3600),Math.floor((s%3600)/60),s%60].map(n=>String(n).padStart(2,'0')).join(':'); }
+  function draw(){
+    if(!analyser) return; raf=requestAnimationFrame(draw);
+    analyser.getByteTimeDomainData(dataArr);
+    const W=canvas.width, H=canvas.height;
+    ctx.clearRect(0,0,W,H);
+    // Read CSS variable at draw time so theme changes reflect immediately
+    ctx.strokeStyle = paused
+      ? (window.getText3Color ? window.getText3Color() : '#55546a')
+      : (window.getAccentColor ? window.getAccentColor() : '#c9b8ff');
+    ctx.lineWidth=2; ctx.beginPath();
+    const step=W/dataArr.length; let x=0;
+    for(let i=0;i<dataArr.length;i++){
+      const v=dataArr[i]/128.0;
+      const y=v*(H/2);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      x+=step;
+    }
+    ctx.lineTo(W, H/2);
+    ctx.stroke();
+  }
+  function resizeCanvas(){
+    canvas.width  = canvas.offsetWidth  || canvas.parentElement.clientWidth || 300;
+    canvas.height = 48;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  // Initial size after layout is ready
+  requestAnimationFrame(resizeCanvas);
+
+  btnRec.addEventListener('click',async()=>{
+    try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }
+    catch(e){ status.textContent='Sin acceso al microfono'; return; }
+    const aC=new AudioContext(); analyser=aC.createAnalyser(); analyser.fftSize=2048;
+    dataArr=new Uint8Array(analyser.frequencyBinCount);
+    aC.createMediaStreamSource(stream).connect(analyser); draw();
+    chunks=[]; paused=false; secs=0;
+    mr=new MediaRecorder(stream,{mimeType:'audio/webm;codecs=opus'});
+    mr.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+    mr.onstop=()=>{
+      cancelAnimationFrame(raf); ctx.clearRect(0,0,canvas.width,canvas.height);
+      const blob=new Blob(chunks,{type:'audio/webm'});
+      playback.src=URL.createObjectURL(blob); playback.style.display='block';
+      const r=new FileReader(); r.onloadend=()=>{recData.value=r.result; recName.value='grabacion-'+Date.now()+'.webm';}; r.readAsDataURL(blob);
+      stream.getTracks().forEach(t=>t.stop());
+    };
+    mr.start(1000); iv=setInterval(()=>{if(!paused){secs++;timer.textContent=fmt(secs);}},1000);
+    timer.classList.add('on'); status.textContent='Grabando...';
+    btnRec.disabled=true; btnPause.disabled=false; btnStop.disabled=false; btnDisc.style.display='none';
+    playback.style.display='none'; recData.value='';
+  });
+  btnPause.addEventListener('click',()=>{
+    if(!mr) return;
+    if(paused){mr.resume();paused=false;timer.classList.add('on');status.textContent='Grabando...';btnPause.textContent='Pausar';}
+    else{mr.pause();paused=true;timer.classList.remove('on');status.textContent='En pausa';btnPause.textContent='Reanudar';}
+  });
+  btnStop.addEventListener('click',()=>{
+    if(!mr)return; clearInterval(iv); timer.classList.remove('on'); status.textContent='Listo';
+    mr.stop(); btnRec.disabled=false; btnPause.disabled=true; btnStop.disabled=true; btnDisc.style.display='inline-flex';
+  });
+  btnDisc.addEventListener('click',()=>{
+    playback.style.display='none'; recData.value=''; recName.value=''; secs=0;
+    timer.textContent='00:00:00'; status.textContent='Listo para grabar';
+    btnDisc.style.display='none'; ctx.clearRect(0,0,canvas.width,canvas.height);
+  });
+})();
+
+// VALIDATE audio source
+document.getElementById('publishForm').addEventListener('submit',function(e){
+  const hasFile=document.querySelector('input[name="audio_file"]')?.files.length>0;
+  const hasUrl=document.getElementById('audio_url')?.value.trim()!=='';
+  const hasRec=document.getElementById('recData')?.value!=='';
+  if(!hasFile&&!hasUrl&&!hasRec){ e.preventDefault(); alert('Necesitas grabar, subir o enlazar un audio.'); }
+});
+
+// TEMPLATE PICKER
+const tplPicker = document.getElementById('tplPicker');
+if(tplPicker){
+  tplPicker.addEventListener('change', function(){
+    const val = this.value;
+    if(val){ document.getElementById('ep-desc').value = val; this.value=''; }
+  });
+}
+
+// LIVE PREVIEW
+function updatePreview(){
+  const title = document.getElementById('ep-title')?.value || '--';
+  const num   = document.getElementById('ep-num')?.value;
+  const season= document.getElementById('ep-season')?.value;
+  const type  = document.getElementById('ep-type')?.value;
+  const desc  = document.getElementById('ep-desc')?.value || '';
+  const date  = document.getElementById('ep-date')?.value;
+
+  document.getElementById('prevTitle').textContent = title;
+
+  let meta = [];
+  if(num) meta.push('Ep. ' + num);
+  if(season) meta.push('T' + season);
+  if(type && type !== 'full') meta.push(type);
+  if(date) meta.push(new Date(date).toLocaleDateString('es-ES'));
+  document.getElementById('prevMeta').textContent = meta.join(' · ') || '--';
+
+  // Simple markdown-ish rendering
+  const html = desc
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/^- (.+)/gm,'<li>$1</li>')
+    .replace(/\n/g,'<br>');
+  document.getElementById('prevDesc').innerHTML = html;
+}
+
+['ep-title','ep-desc','ep-num','ep-season','ep-type','ep-date'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('input', updatePreview);
+});
+updatePreview();
+
+// SAVE DRAFT
+document.getElementById('btnSaveDraft')?.addEventListener('click', function(){
+  document.getElementById('df_title').value   = document.getElementById('ep-title')?.value||'';
+  document.getElementById('df_desc').value    = document.getElementById('ep-desc')?.value||'';
+  document.getElementById('df_slug').value    = document.getElementById('ep-slug')?.value||'';
+  document.getElementById('df_season').value  = document.getElementById('ep-season')?.value||'';
+  document.getElementById('df_num').value     = document.getElementById('ep-num')?.value||'';
+  document.getElementById('df_type').value    = document.getElementById('ep-type')?.value||'full';
+  document.getElementById('df_date').value    = document.getElementById('ep-date')?.value||'';
+  document.getElementById('df_explicit').value= document.querySelector('input[name="explicit"]')?.checked?'1':'';
+  document.getElementById('df_audiourl').value= document.getElementById('audio_url')?.value||'';
+  document.getElementById('draftForm').submit();
+});
+</script>

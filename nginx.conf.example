@@ -5,7 +5,7 @@
 #   YOUR_DOMAIN        -> your domain, e.g. podcast.example.com
 #   YOUR_WEBROOT       -> path to your web root, e.g. /var/www/html/mysite
 #   YOUR_PHP_VERSION   -> your PHP-FPM version, e.g. php8.3-fpm
-#   /castopost            -> the subfolder where CastoPOST lives (change if needed)
+#   /studio            -> the subfolder where CastoPOST lives (change if needed)
 #
 # To verify your PHP-FPM socket path:
 #   ls /run/php/
@@ -64,33 +64,33 @@ server {
     error_log  /var/log/nginx/YOUR_DOMAIN_error.log;
 
     # -------------------------------------------------------
-    # CastoPOST - /castopost/
+    # CastoPOST - /studio/
     # -------------------------------------------------------
-    # Change /castopost/ to whatever subfolder you deployed to.
-    # If CastoPOST is at the domain root, replace /castopost/ with /
+    # Change /studio/ to whatever subfolder you deployed to.
+    # If CastoPOST is at the domain root, replace /studio/ with /
 
     # Block direct access to sensitive PHP files
-    location ~ ^/castopost/(config|auth|castopod|drafts_store|templates_store|podcasts_store)\.php$ {
+    location ~ ^/studio/(config|auth|castopod|drafts_store|templates_store|podcasts_store)\.php$ {
         deny all;
         return 404;
     }
 
     # Block direct access to JSON data files
-    location ~ ^/castopost/.*\.json$ {
+    location ~ ^/studio/.*\.json$ {
         deny all;
         return 404;
     }
 
     # Block tmp directory
-    location ^~ /castopost/tmp/ {
+    location ^~ /studio/tmp/ {
         deny all;
         return 404;
     }
 
     # CastoPOST application
-    location ^~ /castopost/ {
+    location ^~ /studio/ {
         index index.php;
-        try_files $uri $uri/ /castopost/index.php?$query_string;
+        try_files $uri $uri/ /studio/index.php?$query_string;
 
         # PHP-FPM - adjust socket path to match your PHP version
         location ~ \.php$ {
