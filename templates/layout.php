@@ -37,21 +37,21 @@ $allPodcastsNav = array_merge([$defaultPodcast], array_filter($allPodcasts, fn($
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Noto+Sans+Mono:wght@300;400;500&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400&display=swap" rel="stylesheet">
 <style>
 /* ── DARK THEMES ─────────────────────────────────────────── */
-[data-theme="violet"] {
+html[data-theme="violet"] {
   --bg:      #0f0f10; --bg2: #17171a; --bg3: #1f1f24;
   --line:    #28282f; --line2: #38383f;
   --text:    #f0eff4; --text2: #9998a8; --text3: #55546a;
   --accent:  #c9b8ff; --accent-btn: #0f0f10;
   --red:     #f87171; --green: #6ee7b7; --r: 9px;
 }
-[data-theme="teal"] {
+html[data-theme="teal"] {
   --bg:      #0a1012; --bg2: #111d20; --bg3: #172428;
   --line:    #1e3035; --line2: #2a4550;
   --text:    #e8f5f7; --text2: #7aaeb5; --text3: #3d6b72;
   --accent:  #4dd9e0; --accent-btn: #0a1012;
   --red:     #f87171; --green: #6ee7b7; --r: 9px;
 }
-[data-theme="amber"] {
+html[data-theme="amber"] {
   --bg:      #110e09; --bg2: #1c170f; --bg3: #251f15;
   --line:    #2e2618; --line2: #453a25;
   --text:    #faf5eb; --text2: #b8a882; --text3: #6b5c38;
@@ -59,29 +59,28 @@ $allPodcastsNav = array_merge([$defaultPodcast], array_filter($allPodcasts, fn($
   --red:     #f87171; --green: #6ee7b7; --r: 9px;
 }
 /* ── LIGHT THEMES ────────────────────────────────────────── */
-[data-theme="light"] {
+html[data-theme="light"] {
   --bg:      #f8f7f5; --bg2: #eeecea; --bg3: #e4e1dd;
   --line:    #d8d4cf; --line2: #bfbab3;
   --text:    #1a1917; --text2: #57534e; --text3: #a8a29e;
   --accent:  #6d28d9; --accent-btn: #f8f7f5;
   --red:     #dc2626; --green: #059669; --r: 9px;
 }
-[data-theme="light-blue"] {
+html[data-theme="light-blue"] {
   --bg:      #f0f4f8; --bg2: #e2eaf3; --bg3: #d4e0ed;
   --line:    #c5d5e8; --line2: #a8c0d8;
   --text:    #0f1e2e; --text2: #3d5a7a; --text3: #7a9ab8;
   --accent:  #1d6fb8; --accent-btn: #f0f4f8;
   --red:     #dc2626; --green: #059669; --r: 9px;
 }
-[data-theme="light-rose"] {
+html[data-theme="light-rose"] {
   --bg:      #fdf4f5; --bg2: #f7e8ea; --bg3: #f0dade;
   --line:    #e8cdd0; --line2: #d9b3b8;
   --text:    #2d1012; --text2: #7a3a40; --text3: #b8878d;
   --accent:  #be1a2a; --accent-btn: #fdf4f5;
   --red:     #be1a2a; --green: #059669; --r: 9px;
 }
-
-/* Default theme on load */
+/* Fallback if no data-theme set yet */
 :root {
   --bg:      #0f0f10; --bg2: #17171a; --bg3: #1f1f24;
   --line:    #28282f; --line2: #38383f;
@@ -532,6 +531,14 @@ audio { width: 100%; margin-top: .75rem; border-radius: 6px; outline: none; }
   main { padding-bottom: 6rem; }
 }
 </style>
+<!-- Apply saved theme immediately to avoid flash -->
+<script>
+(function(){
+  var t = localStorage.getItem('cp_theme');
+  var valid = ['violet','teal','amber','light','light-blue','light-rose'];
+  document.documentElement.setAttribute('data-theme', valid.indexOf(t) >= 0 ? t : 'violet');
+})();
+</script>
 </head>
 <body>
 
@@ -627,27 +634,26 @@ switch ($page) {
 <script>
 // ── THEME PICKER ─────────────────────────────────────────
 (function() {
-  var THEMES = ['violet','teal','amber','light','light-blue','light-rose'];
-  var saved  = localStorage.getItem('cp_theme');
-  var current = THEMES.includes(saved) ? saved : 'violet';
+  var VALID = ['violet','teal','amber','light','light-blue','light-rose'];
 
   function applyTheme(t) {
+    if (VALID.indexOf(t) < 0) return;
     document.documentElement.setAttribute('data-theme', t);
     localStorage.setItem('cp_theme', t);
-    current = t;
     document.querySelectorAll('.theme-opt').forEach(function(btn) {
       btn.classList.toggle('active', btn.dataset.theme === t);
     });
   }
 
-  // Apply on load before paint to avoid flash
-  applyTheme(current);
+  // Mark current active option
+  var current = document.documentElement.getAttribute('data-theme') || 'violet';
+  document.querySelectorAll('.theme-opt').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.theme === current);
+  });
 
-  document.addEventListener('DOMContentLoaded', function() {
-    var btn = document.getElementById('themeBtn');
-    var dd  = document.getElementById('themeDd');
-    if (!btn || !dd) return;
-
+  var btn = document.getElementById('themeBtn');
+  var dd  = document.getElementById('themeDd');
+  if (btn && dd) {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
       dd.classList.toggle('open');
@@ -655,7 +661,6 @@ switch ($page) {
     document.addEventListener('click', function() {
       dd.classList.remove('open');
     });
-
     document.querySelectorAll('.theme-opt').forEach(function(opt) {
       opt.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -663,19 +668,13 @@ switch ($page) {
         dd.classList.remove('open');
       });
     });
+  }
 
-    // Mark active
-    applyTheme(current);
-  });
-
-  // Expose for waveform use
   window.getAccentColor = function() {
-    return getComputedStyle(document.documentElement)
-      .getPropertyValue('--accent').trim();
+    return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   };
   window.getText3Color = function() {
-    return getComputedStyle(document.documentElement)
-      .getPropertyValue('--text3').trim();
+    return getComputedStyle(document.documentElement).getPropertyValue('--text3').trim();
   };
 })();
 
